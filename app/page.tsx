@@ -7,8 +7,8 @@ import { DetailPanel } from '@/components/DetailPanel';
 import { BoardView } from '@/components/BoardView';
 import { CalendarView } from '@/components/CalendarView';
 import { GanttView } from '@/components/GanttView';
-import { TASKS, PROJECTS, LABELS, Task } from '@/lib/data';
-import { Menu, SlidersHorizontal, List, Kanban, Calendar as CalendarIcon, StretchHorizontal, Plus, Settings, Filter, Check, X } from 'lucide-react';
+import { TASKS, PROJECTS as INITIAL_PROJECTS, LABELS as INITIAL_LABELS, Task, Priority, Project, Label } from '@/lib/data';
+import { Menu, SlidersHorizontal, List, Kanban, Calendar as CalendarIcon, StretchHorizontal, Plus, Settings, Filter, Check, X, Tag, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type ViewMode = 'list' | 'board' | 'calendar' | 'gantt';
@@ -19,6 +19,9 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [tasks, setTasks] = useState<Task[]>(TASKS);
+  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
+  const [labels, setLabels] = useState<Label[]>(INITIAL_LABELS);
+  
   const [todayGroupBy, setTodayGroupBy] = useState<'priority' | 'project' | 'label'>('priority');
   const [isGroupingMenuOpen, setIsGroupingMenuOpen] = useState(false);
   
@@ -27,11 +30,9 @@ export default function Home() {
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
-
-  // --- Derived State ---
-  
-  const activeProject = PROJECTS.find(p => p.id === activeView) || 
-                        PROJECTS.flatMap(p => p.children || []).find(p => p.id === activeView);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const activeProject = projects.find(p => p.id === activeView);
   
   const viewTitle = activeView === 'inbox' ? 'Inbox' : 
                     activeView === 'today' ? 'Today' :
@@ -41,11 +42,45 @@ export default function Home() {
                     activeView === 'labels' ? 'Labels' :
                     activeProject?.name || 'Unknown';
 
+  const isDateInRange = (targetDate: Date, startStr?: string, endStr?: string) => {
+    if (!startStr && !endStr) return false;
+    
+    const parseDateStr = (str?: string): Date | null => {
+      if (!str) return null;
+      if (str.toLowerCase() === 'today') return new Date();
+      if (str.toLowerCase() === 'tomorrow') {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d;
+      }
+      const d = new Date(str);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const start = parseDateStr(startStr);
+    const end = parseDateStr(endStr);
+    const target = new Date(targetDate);
+    target.setHours(0, 0, 0, 0);
+
+    const startNormalized = start ? new Date(start.setHours(0, 0, 0, 0)) : null;
+    const endNormalized = end ? new Date(end.setHours(0, 0, 0, 0)) : null;
+
+    if (startNormalized && endNormalized) {
+      return target >= startNormalized && target <= endNormalized;
+    } else if (startNormalized) {
+      return target.getTime() === startNormalized.getTime();
+    } else if (endNormalized) {
+      return target.getTime() === endNormalized.getTime();
+    }
+    return false;
+  };
+
   const filteredTasks = tasks.filter(task => {
     if (activeView === 'inbox') return task.projectId === 'inbox';
-    if (activeView === 'today') return task.dueDate === 'Today';
-    if (activeView === 'schedule') return task.dueDate !== undefined; // Show all tasks with a due date
+    if (activeView === 'today') return isDateInRange(new Date(), task.startDate, task.dueDate);
+    if (activeView === 'schedule') return task.startDate !== undefined || task.dueDate !== undefined;
     
+    // Specific view filters
     if (activeView === 'projects') {
       if (projectFilter.length > 0) {
         return projectFilter.includes(task.projectId);
@@ -53,7 +88,7 @@ export default function Home() {
       return true;
     }
     
-    if (activeView === 'priority') return true; // Show all tasks
+    if (activeView === 'priority') return true; 
     
     if (activeView === 'labels') {
       if (labelFilter.length > 0) {
@@ -62,8 +97,10 @@ export default function Home() {
       return true;
     }
     
-    // Simple filter for projects (doesn't handle deep nesting of projects for this prototype)
-    return task.projectId === activeView;
+    // Project filter
+    if (task.projectId === activeView) return true;
+    
+    return false;
   }).sort((a, b) => {
     if (activeView === 'priority') {
       return (a.priority || 5) - (b.priority || 5); // Sort by priority (1 is highest)
@@ -90,18 +127,30 @@ export default function Home() {
     return 0;
   });
 
+  // Calculate generic counts for pending tasks
+  const uncompletedTasks = tasks.filter(t => !t.isCompleted);
+  const inboxCount = uncompletedTasks.filter(t => t.projectId === 'inbox').length;
+  const todayCount = uncompletedTasks.filter(t => isDateInRange(new Date(), t.startDate, t.dueDate)).length;
+
   // --- Handlers ---
 
   const handleAddTask = (content: string, projectId?: string, parentId?: string, priority?: number, startDate?: string, dueDate?: string) => {
+    const globalViews = ['today', 'schedule', 'priority', 'projects', 'labels'];
+    const resolvedProjectId = projectId || (globalViews.includes(activeView) ? 'inbox' : activeView);
+
+    const isInbox = activeView === 'inbox';
+    const parsedStartDate = startDate || (!isInbox && activeView === 'today' ? 'Today' : undefined);
+    const parsedDueDate = dueDate || (!isInbox && activeView === 'today' ? 'Today' : undefined);
+
     const newTask: Task = {
       id: `t${Date.now()}`,
       content,
-      priority: priority as any,
+      priority: priority as Priority | undefined,
       labels: [],
-      projectId: projectId || (activeView === 'today' || activeView === 'upcoming' ? 'inbox' : activeView),
+      projectId: resolvedProjectId,
       isCompleted: false,
-      startDate,
-      dueDate: dueDate || (activeView === 'today' ? 'Today' : undefined),
+      startDate: parsedStartDate,
+      dueDate: parsedDueDate,
       parentId,
       children: []
     };
@@ -177,6 +226,30 @@ export default function Home() {
     setSelectedTask(null);
   };
 
+  const handleCreateNewItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newItemName.trim()) return;
+
+      if (activeView === 'projects') {
+      const newProject: Project = {
+        id: `p${Date.now()}`,
+        name: newItemName.trim(),
+        color: 'text-indigo-600'
+      };
+      setProjects([...projects, newProject]);
+    } else {
+      const newLabel: Label = {
+        id: `l${Date.now()}`,
+        name: newItemName.trim(),
+        color: 'bg-indigo-100 text-indigo-700'
+      };
+      setLabels([...labels, newLabel]);
+    }
+
+    setNewItemName('');
+    setIsAddModalOpen(false);
+  };
+
   // Helper to find task by ID recursively
   const findTaskById = (taskList: Task[], id: string): Task | undefined => {
     for (const task of taskList) {
@@ -203,6 +276,11 @@ export default function Home() {
           if (window.innerWidth < 1024) setIsSidebarOpen(false);
         }}
         toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        counts={{
+          inbox: inboxCount,
+          today: todayCount
+        }}
+        projects={projects}
       />
 
       {/* Main Content */}
@@ -264,7 +342,7 @@ export default function Home() {
             {(activeView === 'projects' || activeView === 'labels') && (
               <div className="flex items-center gap-1 ml-4 border-l border-slate-200 pl-4">
                 <button 
-                  onClick={() => alert(`Add new ${activeView === 'projects' ? 'Project' : 'Label'}`)}
+                  onClick={() => { setIsAddModalOpen(true); setNewItemName(''); }}
                   className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
                   title={`Add ${activeView === 'projects' ? 'Project' : 'Label'}`}
                 >
@@ -302,7 +380,7 @@ export default function Home() {
                         
                         {activeView === 'projects' && (
                           <>
-                            {[...PROJECTS, ...PROJECTS.flatMap(p => p.children || [])].map(project => (
+                            {projects.map(project => (
                               <button 
                                 key={project.id}
                                 onClick={() => {
@@ -338,7 +416,7 @@ export default function Home() {
 
                         {activeView === 'labels' && (
                           <>
-                            {LABELS.map(label => (
+                            {labels.map(label => (
                               <button 
                                 key={label.id}
                                 onClick={() => {
@@ -435,6 +513,8 @@ export default function Home() {
             <div className="max-w-5xl mx-auto">
               <TaskList 
                 tasks={filteredTasks} 
+                projects={projects}
+                labels={labels}
                 onTaskClick={setSelectedTask}
                 onToggleComplete={handleToggleComplete}
                 onAddTask={handleAddTask}
@@ -453,6 +533,8 @@ export default function Home() {
             <div className="h-full">
               <BoardView 
                 tasks={filteredTasks}
+                projects={projects}
+                labels={labels}
                 onTaskClick={setSelectedTask}
                 onToggleComplete={handleToggleComplete}
                 onUpdateTask={handleUpdateTask}
@@ -481,6 +563,8 @@ export default function Home() {
             <div className="h-full">
               <GanttView 
                 tasks={filteredTasks}
+                projects={projects}
+                labels={labels}
                 onTaskClick={setSelectedTask}
                 groupBy={
                   activeView === 'today' ? todayGroupBy :
@@ -500,6 +584,8 @@ export default function Home() {
         key={selectedTask?.id}
         task={selectedTask} 
         parentTask={parentTask}
+        projects={projects}
+        labels={labels}
         isOpen={!!selectedTask} 
         onClose={() => setSelectedTask(null)}
         onUpdateTask={handleUpdateTask}
@@ -523,7 +609,7 @@ export default function Home() {
             </div>
             <div className="p-4 max-h-[60vh] overflow-y-auto">
               <div className="space-y-2">
-                {activeView === 'projects' && [...PROJECTS, ...PROJECTS.flatMap(p => p.children || [])].map(project => (
+                {activeView === 'projects' && projects.map(project => (
                   <div key={project.id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 group">
                     <div className="flex items-center gap-3">
                       <div className={cn("w-3 h-3 rounded-full", project.color.replace('bg-', 'bg-'))} />
@@ -537,7 +623,7 @@ export default function Home() {
                   </div>
                 ))}
 
-                {activeView === 'labels' && LABELS.map(label => (
+                {activeView === 'labels' && labels.map(label => (
                   <div key={label.id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 group">
                     <div className="flex items-center gap-3">
                       <div className={cn("w-3 h-3 rounded-full", label.color.replace('bg-', 'bg-'))} />
@@ -560,6 +646,58 @@ export default function Home() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Item Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-800">New {activeView === 'projects' ? 'Project' : 'Label'}</h2>
+              <button 
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateNewItem} className="p-4 flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                  <div className="p-2 bg-slate-50 text-slate-400">
+                    {activeView === 'projects' ? <Folder className="w-4 h-4" /> : <Tag className="w-4 h-4" />}
+                  </div>
+                  <input 
+                    type="text" 
+                    autoFocus
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    placeholder="E.g., Design System"
+                    className="w-full flex-1 px-3 py-2 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={!newItemName.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

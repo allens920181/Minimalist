@@ -1,16 +1,18 @@
 'use client';
 
 import React from 'react';
-import { Task, Priority, LABELS, PROJECTS } from '@/lib/data';
+import { Task, Priority, Project, Label } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
 interface GanttViewProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
+  projects: Project[];
+  labels: Label[];
   groupBy?: 'priority' | 'project' | 'label' | 'schedule';
 }
 
-export function GanttView({ tasks, onTaskClick, groupBy }: GanttViewProps) {
+export function GanttView({ tasks, projects, labels, onTaskClick, groupBy }: GanttViewProps) {
   const today = new Date();
   const daysToShow = 14; 
   
@@ -88,7 +90,9 @@ export function GanttView({ tasks, onTaskClick, groupBy }: GanttViewProps) {
         group.tasks.push(task);
       });
     } else if (groupBy === 'schedule') {
-        const uniqueDates = Array.from(new Set(tasks.map(t => t.dueDate).filter(d => !!d))) as string[];
+        const getDateToGroup = (task: Task) => task.startDate || task.dueDate;
+        
+        const uniqueDates = Array.from(new Set(tasks.map(getDateToGroup).filter(d => !!d))) as string[];
         const sortedDates = uniqueDates.sort((a, b) => {
             if (a === 'Today') return -1;
             if (b === 'Today') return 1;
@@ -104,32 +108,36 @@ export function GanttView({ tasks, onTaskClick, groupBy }: GanttViewProps) {
         ];
 
         tasks.forEach(task => {
-            if (!task.dueDate) {
+            const dateStr = getDateToGroup(task);
+            if (!dateStr) {
                 groups.find(g => g.id === 'undefined')?.tasks.push(task);
-            } else if (task.dueDate.startsWith('2023')) { // Mock expired logic
+            } else if (dateStr.startsWith('2023')) { // Mock expired logic
                  groups.find(g => g.id === 'expired')?.tasks.push(task);
             } else {
-                groups.find(g => g.id === task.dueDate)?.tasks.push(task);
+                groups.find(g => g.id === dateStr)?.tasks.push(task);
             }
         });
 
     } else if (groupBy === 'project') {
-         const allProjects = [...PROJECTS, ...PROJECTS.flatMap(p => p.children || [])];
          groups = [
              { id: 'undefined', label: 'No Project', tasks: [] },
-             ...allProjects.map(p => ({ id: p.id, label: p.name, tasks: [] }))
+             ...projects.map(p => ({ id: p.id, label: p.name, tasks: [] }))
          ];
          tasks.forEach(task => {
              if (!task.projectId || task.projectId === 'inbox') {
                  groups.find(g => g.id === 'undefined')?.tasks.push(task);
              } else {
-                 groups.find(g => g.id === task.projectId)?.tasks.push(task);
+                 let targetGroupId = task.projectId;
+                 if (!groups.find(g => g.id === targetGroupId)) {
+                     targetGroupId = 'undefined';
+                 }
+                 groups.find(g => g.id === targetGroupId)?.tasks.push(task);
              }
          });
     } else if (groupBy === 'label') {
         groups = [
             { id: 'undefined', label: 'No Label', tasks: [] },
-            ...LABELS.map(l => ({ id: l.id, label: l.name, tasks: [] }))
+            ...labels.map(l => ({ id: l.id, label: l.name, tasks: [] }))
         ];
         tasks.forEach(task => {
             if (task.labels.length === 0) {

@@ -12,14 +12,17 @@ import {
   Clock,
   Folder,
   CornerUpLeft,
-  AlertTriangle
+  AlertTriangle,
+  Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Task, Priority, LABELS, PROJECTS } from '@/lib/data';
+import { Task, Priority, Project, Label } from '@/lib/data';
 
 interface DetailPanelProps {
   task: Task | null;
   parentTask?: Task;
+  projects: Project[];
+  labels: Label[];
   isOpen: boolean;
   onClose: () => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
@@ -28,7 +31,7 @@ interface DetailPanelProps {
   onAddTask: (content: string, projectId?: string, parentId?: string) => void;
 }
 
-export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask, onTaskClick, onAddTask, parentTask }: DetailPanelProps) {
+export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask, onTaskClick, onAddTask, parentTask, projects, labels }: DetailPanelProps) {
   const [content, setContent] = useState(task?.content || '');
   const [description, setDescription] = useState(task?.description || '');
   const [isProjectWarningOpen, setIsProjectWarningOpen] = useState(false);
@@ -36,17 +39,11 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
   const [subtaskContent, setSubtaskContent] = useState('');
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const [isLabelSelectorOpen, setIsLabelSelectorOpen] = useState(false);
 
   const allProjects = React.useMemo(() => {
-      const flat: { id: string; name: string; color: string; level: number }[] = [];
-      PROJECTS.forEach(p => {
-          flat.push({ ...p, level: 0 });
-          if (p.children) {
-              p.children.forEach(c => flat.push({ ...c, level: 1 }));
-          }
-      });
-      return flat;
-  }, []);
+      return projects.map(p => ({ ...p, level: 0 }));
+  }, [projects]);
 
   if (!task) return null;
 
@@ -57,27 +54,22 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
     4: 'text-slate-400'
   };
 
-  const currentProject = PROJECTS.find(p => p.id === task.projectId) || 
-                         PROJECTS.flatMap(p => p.children || []).find(p => p.id === task.projectId);
+  const currentProject = projects.find(p => p.id === task.projectId);
   
   const handleProjectSelect = (projectId: string) => {
-    if (task.parentId || parentTask) {
-      setPendingProjectId(projectId);
-      setIsProjectWarningOpen(true);
-    } else {
-      onUpdateTask(task.id, { projectId });
-      setIsProjectSelectorOpen(false);
-    }
+    onUpdateTask(task.id, { projectId });
+    setIsProjectSelectorOpen(false);
   };
 
-  const confirmProjectChange = () => {
-    if (pendingProjectId) {
-      // Detach from parent and change project
-      onUpdateTask(task.id, { projectId: pendingProjectId, parentId: undefined });
-      setIsProjectWarningOpen(false);
-      setPendingProjectId(null);
-      setIsProjectSelectorOpen(false);
+  const handleLabelToggle = (labelId: string) => {
+    const isSelected = task.labels.includes(labelId);
+    let newLabels;
+    if (isSelected) {
+      newLabels = task.labels.filter(id => id !== labelId);
+    } else {
+      newLabels = [...task.labels, labelId];
     }
+    onUpdateTask(task.id, { labels: newLabels });
   };
 
   return (
@@ -286,9 +278,9 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
               <Tag className="w-4 h-4" />
               <span>Labels</span>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 relative">
               {task.labels.map(labelId => {
-                const label = LABELS.find(l => l.id === labelId);
+                const label = labels.find(l => l.id === labelId);
                 if (!label) return null;
                 return (
                   <span key={label.id} className={cn("px-2 py-0.5 rounded text-xs", label.color)}>
@@ -296,9 +288,40 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
                   </span>
                 );
               })}
-              <button className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1 px-2 py-0.5 rounded border border-dashed border-slate-300 hover:border-slate-400">
-                <Plus className="w-3 h-3" /> Add label
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setIsLabelSelectorOpen(!isLabelSelectorOpen)}
+                  className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1 px-2 py-0.5 rounded border border-dashed border-slate-300 hover:border-slate-400"
+                >
+                  <Plus className="w-3 h-3" /> Add label
+                </button>
+                {isLabelSelectorOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsLabelSelectorOpen(false)} />
+                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto py-1">
+                      {labels.map(label => {
+                        const isSelected = task.labels.includes(label.id);
+                        return (
+                          <div 
+                            key={label.id}
+                            className="px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm text-slate-600 flex items-center justify-between"
+                            onClick={() => handleLabelToggle(label.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={cn("w-3 h-3 rounded-full flex-shrink-0", label.color.replace('text-', 'bg-').replace('bg-indigo-100', 'bg-indigo-400'))} />
+                              <span className="truncate">{label.name}</span>
+                            </div>
+                            {isSelected && <CheckCircle2 className="w-3 h-3 text-indigo-600 flex-shrink-0" />}
+                          </div>
+                        );
+                      })}
+                      {labels.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-slate-400">No labels available</div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -365,61 +388,6 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
         </div>
       </div>
 
-      {/* Project Change Warning Modal */}
-      {isProjectWarningOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6">
-              <div className="flex items-center gap-3 text-amber-600 mb-4">
-                <div className="p-2 bg-amber-100 rounded-full">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900">Warning</h3>
-              </div>
-              <p className="text-slate-600 mb-6">
-                This action will remove the task association. Do you want to proceed?
-              </p>
-              <div className="flex justify-end gap-3">
-                <button 
-                  onClick={() => {
-                    setIsProjectWarningOpen(false);
-                    setPendingProjectId(null);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={confirmProjectChange}
-                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg"
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
-}
-
-function Plus(props: any) {
-  return (
-    <svg 
-      {...props}
-      xmlns="http://www.w3.org/2000/svg" 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
-      <path d="M5 12h14" />
-      <path d="M12 5v14" />
-    </svg>
-  )
 }

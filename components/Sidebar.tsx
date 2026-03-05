@@ -16,13 +16,15 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PROJECTS, LABELS, Project } from '@/lib/data';
+import { Project, Label } from '@/lib/data';
 
 interface SidebarProps {
   isOpen: boolean;
   activeView: string;
   onSelectView: (viewId: string) => void;
   toggleSidebar: () => void;
+  counts?: { inbox: number; today: number };
+  projects?: Project[];
 }
 
 interface NavItemProps {
@@ -49,10 +51,10 @@ const NavItem = ({
   <button
     onClick={() => onSelectView(id)}
     className={cn(
-      "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+      "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 relative overflow-hidden",
       activeView === id 
-        ? "bg-slate-100 text-slate-900 font-medium" 
-        : "text-slate-600 hover:bg-slate-50",
+        ? "bg-indigo-50/80 text-indigo-700 font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] ring-1 ring-indigo-500/10" 
+        : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900",
       !isOpen && "lg:justify-center lg:px-2"
     )}
     title={!isOpen ? label : undefined}
@@ -65,7 +67,7 @@ const NavItem = ({
   </button>
 );
 
-export function Sidebar({ isOpen, activeView, onSelectView, toggleSidebar }: SidebarProps) {
+export function Sidebar({ isOpen, activeView, onSelectView, toggleSidebar, counts, projects = [] }: SidebarProps) {
   return (
     <>
       {/* Mobile Overlay */}
@@ -80,7 +82,7 @@ export function Sidebar({ isOpen, activeView, onSelectView, toggleSidebar }: Sid
       {/* Sidebar Container */}
       <aside 
         className={cn(
-          "fixed lg:static inset-y-0 left-0 z-30 bg-slate-50 border-r border-slate-200 transform transition-all duration-300 ease-in-out flex flex-col",
+          "fixed lg:static inset-y-0 left-0 z-30 bg-slate-50/80 backdrop-blur-md border-r border-slate-200/60 transform transition-all duration-300 ease-in-out flex flex-col shadow-[1px_0_4px_rgba(0,0,0,0.02)]",
           isOpen ? "w-[280px] translate-x-0" : "w-[280px] -translate-x-full lg:translate-x-0 lg:w-[70px]"
         )}
       >
@@ -106,10 +108,32 @@ export function Sidebar({ isOpen, activeView, onSelectView, toggleSidebar }: Sid
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-6">
           {/* Main Nav */}
           <div className="space-y-1">
-            <NavItem id="inbox" icon={Inbox} label="Inbox" count={3} colorClass="text-blue-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
-            <NavItem id="today" icon={Calendar} label="Today" count={1} colorClass="text-emerald-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
+            <NavItem id="inbox" icon={Inbox} label="Inbox" count={counts?.inbox} colorClass="text-blue-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
+            <NavItem id="today" icon={Calendar} label="Today" count={counts?.today} colorClass="text-emerald-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
             <NavItem id="schedule" icon={Calendar} label="Schedule" colorClass="text-purple-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
             <NavItem id="projects" icon={Folder} label="Projects" colorClass="text-slate-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
+            
+            {/* Custom Projects */}
+            {isOpen && projects.length > 0 && (
+              <div className="pl-8 space-y-1 pb-1">
+                {projects.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => onSelectView(p.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors",
+                      activeView === p.id 
+                        ? "bg-indigo-50/50 text-indigo-700 font-medium" 
+                        : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/80"
+                    )}
+                  >
+                    <span className={cn("w-2 h-2 rounded-full", p.color.replace('text-', 'bg-'))} />
+                    <span className="truncate">{p.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <NavItem id="priority" icon={Flag} label="Priority" colorClass="text-orange-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
             <NavItem id="labels" icon={Tag} label="Labels" colorClass="text-indigo-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
           </div>

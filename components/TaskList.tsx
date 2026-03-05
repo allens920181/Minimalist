@@ -14,17 +14,21 @@ import {
   Inbox
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Task, Priority, LABELS, PROJECTS } from '@/lib/data';
+import { Task, Priority, Project, Label } from '@/lib/data';
 
 interface TaskListProps {
   tasks: Task[];
+  projects: Project[];
+  labels: Label[];
   onTaskClick: (task: Task) => void;
   onToggleComplete: (taskId: string) => void;
   onAddTask: (content: string, projectId?: string, parentId?: string, priority?: number, startDate?: string, dueDate?: string) => void;
   groupBy?: 'priority' | 'project' | 'label' | 'schedule';
+  activeViewId?: string;
+  onProjectClick?: (projectId: string) => void;
 }
 
-export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, groupBy }: TaskListProps) {
+export function TaskList({ tasks, projects, labels, onTaskClick, onToggleComplete, onAddTask, groupBy, activeViewId, onProjectClick }: TaskListProps) {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddValue, setQuickAddValue] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
@@ -36,16 +40,12 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
   const [isPrioritySelectorOpen, setIsPrioritySelectorOpen] = useState(false);
   const [isDateSelectorOpen, setIsDateSelectorOpen] = useState(false);
 
+  const [inlineAddGroup, setInlineAddGroup] = useState<string | null>(null);
+  const [inlineAddValue, setInlineAddValue] = useState('');
+
   const allProjects = React.useMemo(() => {
-      const flat: { id: string; name: string; color: string; level: number }[] = [];
-      PROJECTS.forEach(p => {
-          flat.push({ ...p, level: 0 });
-          if (p.children) {
-              p.children.forEach(c => flat.push({ ...c, level: 1 }));
-          }
-      });
-      return flat;
-  }, []);
+      return projects.map(p => ({ ...p, level: 0 }));
+  }, [projects]);
 
   const handleQuickAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +59,23 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
       setIsProjectSelectorOpen(false);
       setIsPrioritySelectorOpen(false);
       setIsDateSelectorOpen(false);
-      // Keep open for multiple adds
+      setQuickAddValue('');
+      setIsQuickAddOpen(false);
     }
+  };
+
+  const handleInlineAdd = (groupId: string, e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inlineAddValue.trim()) return;
+
+    let projectId, priority, dueDate;
+    if (groupBy === 'project' && groupId !== 'undefined') projectId = groupId;
+    if (groupBy === 'priority' && groupId !== 'undefined') priority = Number(groupId);
+    if (groupBy === 'schedule' && groupId !== 'undefined' && groupId !== 'expired') dueDate = groupId;
+
+    onAddTask(inlineAddValue, projectId, undefined, priority, undefined, dueDate);
+    setInlineAddValue('');
+    setInlineAddGroup(null);
   };
 
   const TaskItem = ({ task, level = 0 }: { task: Task; level?: number }) => {
@@ -137,7 +152,7 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
 
               <div className="flex gap-1.5">
                 {task.labels.map(lid => {
-                  const label = LABELS.find(l => l.id === lid);
+                  const label = labels.find(l => l.id === lid);
                   if (!label) return null;
                   return (
                     <span key={lid} className={cn("text-[10px] px-1.5 py-0.5 rounded-full opacity-75", label.color)}>
@@ -161,7 +176,7 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
         {hasChildren && isExpanded && (
           <div className="border-l border-slate-100 ml-[27px]">
              {task.children!.map(child => (
-               <TaskItem key={child.id} task={child} level={level} />
+               <TaskItem key={child.id} task={child} level={level + 1} />
              ))}
           </div>
         )}
@@ -189,7 +204,9 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
         group.tasks.push(task);
       });
     } else if (groupBy === 'schedule') {
-        const uniqueDates = Array.from(new Set(tasks.map(t => t.dueDate).filter(d => !!d))) as string[];
+        const getDateToGroup = (task: Task) => task.startDate || task.dueDate;
+        
+        const uniqueDates = Array.from(new Set(tasks.map(getDateToGroup).filter(d => !!d))) as string[];
         const sortedDates = uniqueDates.sort((a, b) => {
             if (a === 'Today') return -1;
             if (b === 'Today') return 1;
@@ -205,32 +222,35 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
         ];
 
         tasks.forEach(task => {
-            if (!task.dueDate) {
+            const dateStr = getDateToGroup(task);
+            if (!dateStr) {
                 groups.find(g => g.id === 'undefined')?.tasks.push(task);
-            } else if (task.dueDate.startsWith('2023')) { // Mock expired logic
+            } else if (dateStr.startsWith('2023')) { // Mock expired logic
                  groups.find(g => g.id === 'expired')?.tasks.push(task);
             } else {
-                groups.find(g => g.id === task.dueDate)?.tasks.push(task);
+                groups.find(g => g.id === dateStr)?.tasks.push(task);
             }
         });
 
-    } else if (groupBy === 'project') {
-         const allProjects = [...PROJECTS, ...PROJECTS.flatMap(p => p.children || [])];
          groups = [
              { id: 'undefined', label: 'No Project', tasks: [] },
-             ...allProjects.map(p => ({ id: p.id, label: p.name, tasks: [] }))
+             ...projects.map(p => ({ id: p.id, label: p.name, tasks: [] }))
          ];
          tasks.forEach(task => {
              if (!task.projectId || task.projectId === 'inbox') {
                  groups.find(g => g.id === 'undefined')?.tasks.push(task);
              } else {
-                 groups.find(g => g.id === task.projectId)?.tasks.push(task);
+                 let targetGroupId = task.projectId;
+                 if (!groups.find(g => g.id === targetGroupId)) {
+                     targetGroupId = 'undefined';
+                 }
+                 groups.find(g => g.id === targetGroupId)?.tasks.push(task);
              }
          });
     } else if (groupBy === 'label') {
         groups = [
             { id: 'undefined', label: 'No Label', tasks: [] },
-            ...LABELS.map(l => ({ id: l.id, label: l.name, tasks: [] }))
+            ...labels.map(l => ({ id: l.id, label: l.name, tasks: [] }))
         ];
         tasks.forEach(task => {
             if (task.labels.length === 0) {
@@ -253,16 +273,43 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
         });
     }
 
-    return groups.filter(g => g.tasks.length > 0).map(group => (
+    return groups.map(group => (
       <div key={group.id} className="mb-6">
         <h3 className="text-sm font-semibold text-slate-500 mb-2 flex items-center gap-2">
             {group.label} 
             <span className="text-xs font-normal bg-slate-100 px-1.5 rounded-full">{group.tasks.length}</span>
         </h3>
         <div className="space-y-1">
-          {group.tasks.map(task => (
-            <TaskItem key={`${group.id}-${task.id}`} task={task} />
-          ))}
+
+          {group.tasks.length === 0 ? (
+            <div className="text-sm text-slate-400 py-2 italic pl-[32px]">No tasks</div>
+          ) : (
+            group.tasks.map(task => (
+              <TaskItem key={`${group.id}-${task.id}`} task={task} />
+            ))
+          )}
+          
+          {inlineAddGroup === group.id ? (
+            <form onSubmit={(e) => handleInlineAdd(group.id as string, e)} className="mt-2 flex items-center gap-2 pl-[32px]">
+               <input 
+                 autoFocus
+                 type="text"
+                 value={inlineAddValue}
+                 onChange={(e) => setInlineAddValue(e.target.value)}
+                 onBlur={() => setInlineAddGroup(null)}
+                 placeholder="Type task name and press Enter..."
+                 className="w-full text-sm border-b border-indigo-200 outline-none pb-1 focus:border-indigo-500 bg-transparent text-slate-700 placeholder:text-slate-400"
+               />
+            </form>
+          ) : (
+            <button 
+              onClick={() => setInlineAddGroup(group.id as string)}
+              className="group flex items-center gap-2 text-slate-400 hover:text-indigo-600 transition-colors px-2 py-1.5 w-full text-left mt-1 pl-[32px]"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-sm">Add task</span>
+            </button>
+          )}
         </div>
       </div>
     ));
@@ -270,6 +317,7 @@ export function TaskList({ tasks, onTaskClick, onToggleComplete, onAddTask, grou
 
   return (
     <div className="pb-20">
+
       {/* Quick Add Button / Form */}
       <div className="mb-4">
         {!isQuickAddOpen ? (

@@ -42,8 +42,6 @@ export interface Project {
   id: string;
   name: string;
   color: string;
-  parentId?: string;
-  children?: Project[]; // Sub-projects
   startDate?: string;
   endDate?: string;
 }
@@ -57,25 +55,7 @@ export const LABELS: Label[] = [
   { id: 'l4', name: 'Shopping', color: 'bg-purple-100 text-purple-700' },
 ];
 
-export const PROJECTS: Project[] = [
-  { 
-    id: 'p1', 
-    name: 'Website Redesign', 
-    color: 'text-slate-600',
-    startDate: '2023-10-01',
-    endDate: '2023-12-31'
-  },
-  { 
-    id: 'p2', 
-    name: 'Home Renovation', 
-    color: 'text-orange-600',
-    children: [
-      { id: 'p2-1', name: 'Kitchen', color: 'text-orange-500' },
-      { id: 'p2-2', name: 'Living Room', color: 'text-orange-500' }
-    ]
-  },
-  { id: 'p3', name: 'Learning', color: 'text-blue-600' },
-];
+export const PROJECTS: Project[] = [];
 
 export const TASKS: Task[] = [
   {

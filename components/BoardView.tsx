@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Task, Priority, LABELS, PROJECTS } from '@/lib/data';
+import { Task, Priority, Project, Label } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { 
   MoreHorizontal, 
@@ -43,10 +43,12 @@ interface BoardViewProps {
   onUpdateTask?: (taskId: string, updates: Partial<Task>) => void;
   onAddTask: (content: string, projectId?: string, parentId?: string, priority?: number, startDate?: string, dueDate?: string) => void;
   groupBy?: 'priority' | 'project' | 'label' | 'schedule';
+  projects: Project[];
+  labels: Label[];
 }
 
 // --- Sortable Task Item ---
-function SortableTaskItem({ task, onClick, onToggleComplete }: { task: Task; onClick: () => void; onToggleComplete: () => void }) {
+function SortableTaskItem({ task, onClick, onToggleComplete, labels }: { task: Task; onClick: () => void; onToggleComplete: () => void; labels: Label[] }) {
   const {
     attributes,
     listeners,
@@ -135,7 +137,7 @@ function SortableTaskItem({ task, onClick, onToggleComplete }: { task: Task; onC
         </div>
 
         {task.labels.map(lid => {
-           const label = LABELS.find(l => l.id === lid);
+           const label = labels.find(l => l.id === lid);
            if (!label) return null;
            return (
              <div key={lid} className={cn("text-[10px] px-1.5 py-0.5 rounded border opacity-75", label.color)}>
@@ -147,9 +149,8 @@ function SortableTaskItem({ task, onClick, onToggleComplete }: { task: Task; onC
     </div>
   );
 }
-
 // --- Droppable Column ---
-function BoardColumn({ id, title, count, tasks, onTaskClick, onToggleComplete, onAddTask, groupBy }: { 
+function BoardColumn({ id, title, count, tasks, onTaskClick, onToggleComplete, onAddTask, groupBy, labels }: { 
   id: string | number; 
   title: string; 
   count: number; 
@@ -158,6 +159,7 @@ function BoardColumn({ id, title, count, tasks, onTaskClick, onToggleComplete, o
   onToggleComplete: (taskId: string) => void;
   onAddTask: (content: string, projectId?: string, parentId?: string, priority?: number, startDate?: string, dueDate?: string) => void;
   groupBy?: 'priority' | 'project' | 'label' | 'schedule';
+  labels: Label[];
 }) {
   const { setNodeRef } = useDroppable({ id });
   const [isAdding, setIsAdding] = useState(false);
@@ -240,6 +242,7 @@ function BoardColumn({ id, title, count, tasks, onTaskClick, onToggleComplete, o
                 task={task} 
                 onClick={() => onTaskClick(task)}
                 onToggleComplete={() => onToggleComplete(task.id)}
+                labels={labels}
               />
             ))}
           </div>
@@ -249,7 +252,7 @@ function BoardColumn({ id, title, count, tasks, onTaskClick, onToggleComplete, o
   );
 }
 
-export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, onAddTask, groupBy }: BoardViewProps) {
+export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, onAddTask, groupBy, projects, labels }: BoardViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -280,7 +283,8 @@ export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, 
         col.tasks.push(task);
       });
     } else if (groupBy === 'schedule') {
-        const uniqueDates = Array.from(new Set(tasks.map(t => t.dueDate).filter(d => !!d))) as string[];
+        const getDateToGroup = (task: Task) => task.startDate || task.dueDate;
+        const uniqueDates = Array.from(new Set(tasks.map(getDateToGroup).filter(d => !!d))) as string[];
         const sortedDates = uniqueDates.sort((a, b) => {
             if (a === 'Today') return -1;
             if (b === 'Today') return 1;
@@ -296,32 +300,36 @@ export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, 
         ];
 
         tasks.forEach(task => {
-            if (!task.dueDate) {
+            const dateStr = getDateToGroup(task);
+            if (!dateStr) {
                 cols.find(c => c.id === 'undefined')?.tasks.push(task);
-            } else if (task.dueDate.startsWith('2023')) { // Mock expired logic
+            } else if (dateStr.startsWith('2023')) { // Mock expired logic
                  cols.find(c => c.id === 'expired')?.tasks.push(task);
             } else {
-                cols.find(c => c.id === task.dueDate)?.tasks.push(task);
+                cols.find(c => c.id === dateStr)?.tasks.push(task);
             }
         });
 
     } else if (groupBy === 'project') {
-         const allProjects = [...PROJECTS, ...PROJECTS.flatMap(p => p.children || [])];
          cols = [
              { id: 'undefined', title: 'No Project', tasks: [] },
-             ...allProjects.map(p => ({ id: p.id, title: p.name, tasks: [] }))
+             ...projects.map(p => ({ id: p.id, title: p.name, tasks: [] }))
          ];
          tasks.forEach(task => {
              if (!task.projectId || task.projectId === 'inbox') {
                  cols.find(c => c.id === 'undefined')?.tasks.push(task);
              } else {
-                 cols.find(c => c.id === task.projectId)?.tasks.push(task);
+                 let targetGroupId = task.projectId;
+                 if (!cols.find(c => c.id === targetGroupId)) {
+                     targetGroupId = 'undefined';
+                 }
+                 cols.find(c => c.id === targetGroupId)?.tasks.push(task);
              }
          });
     } else if (groupBy === 'label') {
         cols = [
             { id: 'undefined', title: 'No Label', tasks: [] },
-            ...LABELS.map(l => ({ id: l.id, title: l.name, tasks: [] }))
+            ...labels.map(l => ({ id: l.id, title: l.name, tasks: [] }))
         ];
         tasks.forEach(task => {
             if (task.labels.length === 0) {
@@ -351,7 +359,7 @@ export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, 
           });
     }
     return cols;
-  }, [tasks, groupBy]);
+  }, [tasks, groupBy, projects, labels]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -478,6 +486,7 @@ export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, 
               onToggleComplete={onToggleComplete}
               onAddTask={onAddTask}
               groupBy={groupBy}
+              labels={labels}
             />
           ))}
         </div>
