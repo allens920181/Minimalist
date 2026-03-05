@@ -4,12 +4,12 @@ import React, { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import {
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   User,
 } from 'firebase/auth';
-import { cn } from '@/lib/utils';
 import { Layout } from 'lucide-react';
 
 interface AuthGateProps {
@@ -21,6 +21,9 @@ export function AuthGate({ children }: AuthGateProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Handle redirect result after returning from Google
+    getRedirectResult(auth).catch(() => {});
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -28,13 +31,9 @@ export function AuthGate({ children }: AuthGateProps) {
     return unsubscribe;
   }, []);
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      console.error('Sign-in error:', err);
-    }
+    signInWithRedirect(auth, provider);
   };
 
   const handleSignOut = async () => {
