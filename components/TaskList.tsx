@@ -90,87 +90,86 @@ export function TaskList({ tasks, projects, labels, onTaskClick, onToggleComplet
     }[task.priority || 4];
 
     return (
-      <div className="group">
-        <div 
-          className={cn(
-            "flex items-start gap-3 py-3 px-2 -mx-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer border-b border-transparent hover:border-slate-100",
-            task.isCompleted && "opacity-60"
+    <div className="group/item">
+      <div 
+        className={cn(
+          "flex items-start gap-3 py-3 px-3 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-slate-200/60 hover:bg-white hover:shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:-translate-y-[1px]",
+          task.isCompleted && "opacity-60"
+        )}
+        style={{ paddingLeft: `${level * 24 + 12}px` }}
+        onClick={() => onTaskClick(task)}
+      >
+        {/* Checkbox Area */}
+        <div className="mt-0.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {/* Checkbox */}
+          <button
+            onClick={() => onToggleComplete(task.id)}
+            className={cn(
+              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 active:scale-90 hover:scale-110",
+              task.isCompleted 
+                ? "bg-indigo-600 border-indigo-600 text-white" 
+                : cn("bg-transparent hover:bg-slate-50", priorityColor)
+            )}
+            title={task.isCompleted ? "Mark as incomplete" : "Mark as complete"}
+          >
+            {task.isCompleted && <Check className="w-3.5 h-3.5 animate-in zoom-in-50 duration-200" />}
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className={cn(
+            "text-sm font-medium text-slate-800 break-words transition-all duration-300",
+            task.isCompleted && "line-through text-slate-400 font-normal"
+          )}>
+            {task.content}
+          </div>
+          
+          {/* Description Snippet */}
+          {task.description && !task.isCompleted && (
+            <div className="text-xs text-slate-400 mt-1 line-clamp-1">
+              {task.description}
+            </div>
           )}
-          style={{ paddingLeft: `${level * 24 + 8}px` }}
-          onClick={() => onTaskClick(task)}
-        >
-          {/* Checkbox / Drag Handle Area */}
-          <div className="mt-0.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {/* Expand/Collapse for subtasks */}
-            <button 
-              className={cn(
-                "p-0.5 text-slate-400 hover:text-slate-600 rounded transition-opacity",
-                hasChildren ? "opacity-100" : "opacity-0 pointer-events-none"
-              )}
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            </button>
-
-            {/* Checkbox */}
-            <button
-              onClick={() => onToggleComplete(task.id)}
-              className={cn(
-                "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                task.isCompleted 
-                  ? "bg-slate-400 border-slate-400 text-white" 
-                  : cn("bg-transparent hover:bg-slate-100", priorityColor)
-              )}
-            >
-              {task.isCompleted && <Check className="w-3 h-3" />}
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className={cn(
-              "text-sm text-slate-800 break-words",
-              task.isCompleted && "line-through text-slate-500"
-            )}>
-              {task.content}
-            </div>
-            
-            {/* Meta Row */}
-            <div className="flex items-center gap-3 mt-1.5">
-              {task.description && (
-                <span className="text-xs text-slate-400 truncate max-w-[200px]">
-                  {task.description}
-                </span>
-              )}
-              
-              {task.dueDate && (
-                <div className="flex items-center gap-1 text-xs text-red-500">
-                  <Calendar className="w-3 h-3" />
-                  <span>{task.dueDate}</span>
-                </div>
-              )}
-
-              <div className="flex gap-1.5">
-                {task.labels.map(lid => {
-                  const label = labels.find(l => l.id === lid);
-                  if (!label) return null;
-                  return (
-                    <span key={lid} className={cn("text-[10px] px-1.5 py-0.5 rounded-full opacity-75", label.color)}>
-                      {label.name}
-                    </span>
-                  );
-                })}
+          
+          {/* Meta Row */}
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
+            {task.dueDate && (
+              <div className={cn(
+                "flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border",
+                task.dueDate === 'Today' ? "text-red-600 bg-red-50 border-red-100" :
+                task.dueDate === 'Tomorrow' ? "text-orange-600 bg-orange-50 border-orange-100" :
+                "text-slate-500 bg-slate-50 border-slate-100"
+              )}>
+                <Calendar className="w-3 h-3" />
+                <span>{task.dueDate}</span>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Actions (Visible on Hover) */}
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pr-2">
-            <button className="p-1 text-slate-400 hover:text-slate-600 rounded">
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
+            <div className="flex gap-1.5">
+              {task.labels.map(lid => {
+                const label = labels.find(l => l.id === lid);
+                if (!label) return null;
+                return (
+                  <span key={lid} className={cn("text-[9px] font-semibold px-2 py-0.5 rounded-full tracking-tight", label.color)}>
+                    {label.name}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        {/* Actions */}
+        <div className="opacity-0 group-hover/item:opacity-100 transition-all duration-200 flex items-center gap-1 pr-1">
+          <button 
+            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+            title="More actions"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
         {/* Recursive Children */}
         {hasChildren && isExpanded && (
@@ -282,12 +281,20 @@ export function TaskList({ tasks, projects, labels, onTaskClick, onToggleComplet
         <div className="space-y-1">
 
           {group.tasks.length === 0 ? (
-            <div className="text-sm text-slate-400 py-2 italic pl-[32px]">No tasks</div>
-          ) : (
-            group.tasks.map(task => (
+          <div className="flex flex-col items-center justify-center py-10 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200/60">
+             <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-3">
+                <Inbox className="w-6 h-6 text-slate-300" />
+             </div>
+             <p className="text-sm font-medium text-slate-500">No tasks here yet</p>
+             <p className="text-xs text-slate-400 mt-1 text-center">Enjoy your clear space, or click below to start adding.</p>
+          </div>
+        ) : (
+          <div className="grid gap-1">
+            {group.tasks.map(task => (
               <TaskItem key={`${group.id}-${task.id}`} task={task} />
-            ))
-          )}
+            ))}
+          </div>
+        )}
           
           {inlineAddGroup === group.id ? (
             <form onSubmit={(e) => handleInlineAdd(group.id as string, e)} className="mt-2 flex items-center gap-2 pl-[32px]">

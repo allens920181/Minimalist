@@ -87,7 +87,7 @@ function SortableTaskItem({ task, onClick, onToggleComplete, labels }: { task: T
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group"
+      className="bg-white p-3 rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-slate-200/80 hover:shadow-[0_4px_12px_rgba(0,0,0,0.04)] transition-all cursor-grab active:cursor-grabbing group/card"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2">
@@ -97,13 +97,14 @@ function SortableTaskItem({ task, onClick, onToggleComplete, labels }: { task: T
               onToggleComplete();
             }}
             className={cn(
-              "mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center transition-colors flex-shrink-0",
+              "mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center transition-all flex-shrink-0 active:scale-90 hover:scale-110",
               task.isCompleted 
-                ? "bg-slate-400 border-slate-400 text-white" 
+                ? "bg-indigo-600 border-indigo-600 text-white" 
                 : "border-slate-300 hover:border-indigo-500 text-transparent hover:text-indigo-500"
             )}
+            title={task.isCompleted ? "Mark as incomplete" : "Mark as complete"}
           >
-            {task.isCompleted && <CheckCircle2 className="w-3 h-3" />}
+            {task.isCompleted && <CheckCircle2 className="w-3 h-3 animate-in zoom-in-50 duration-200" />}
           </button>
           <span className={cn(
             "text-sm font-medium text-slate-800 line-clamp-2",
@@ -112,7 +113,10 @@ function SortableTaskItem({ task, onClick, onToggleComplete, labels }: { task: T
             {task.content}
           </span>
         </div>
-        <button className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button 
+          className="text-slate-400 hover:text-slate-600 opacity-0 group-hover/card:opacity-100 transition-opacity"
+          title="More actions"
+        >
           <MoreHorizontal className="w-4 h-4" />
         </button>
       </div>
@@ -458,7 +462,7 @@ export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, 
     sideEffects: defaultDropAnimationSideEffects({
       styles: {
         active: {
-          opacity: '0.5',
+          opacity: '0.4',
         },
       },
     }),
@@ -493,18 +497,18 @@ export function BoardView({ tasks, onTaskClick, onToggleComplete, onUpdateTask, 
       </div>
       <DragOverlay dropAnimation={dropAnimation}>
         {activeTask ? (
-           <div className="bg-white p-3 rounded-lg shadow-lg border border-indigo-200 w-[280px] rotate-2 cursor-grabbing">
+           <div className="bg-white p-4 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.1)] border border-indigo-100 w-[280px] rotate-[2deg] cursor-grabbing scale-105 transition-transform duration-200">
              <div className="flex items-start justify-between gap-2">
                <div className="flex items-start gap-2">
                  <div className={cn(
                    "mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center",
                    activeTask.isCompleted 
-                     ? "bg-slate-400 border-slate-400 text-white" 
+                     ? "bg-indigo-600 border-indigo-600 text-white" 
                      : "border-slate-300"
                  )}>
                    {activeTask.isCompleted && <CheckCircle2 className="w-3 h-3" />}
                  </div>
-                 <span className="text-sm font-medium text-slate-800 line-clamp-2">
+                 <span className="text-sm font-semibold text-slate-800 line-clamp-2">
                    {activeTask.content}
                  </span>
                </div>

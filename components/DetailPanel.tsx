@@ -85,7 +85,7 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
 
       <div 
         className={cn(
-          "fixed inset-y-0 right-0 z-40 w-full sm:w-[400px] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col border-l border-slate-100",
+          "fixed inset-y-0 right-0 z-40 w-full sm:w-[450px] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.04)] transform transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] flex flex-col border-l border-slate-100",
           isOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
@@ -105,6 +105,7 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
             <button 
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+              title="Close panel"
             >
               <X className="w-5 h-5" />
             </button>
@@ -118,9 +119,9 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
           <div className="flex gap-3">
             <button 
               className={cn(
-                "mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0",
+                "mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all active:scale-90 hover:scale-110 flex-shrink-0",
                 task.isCompleted 
-                  ? "bg-slate-400 border-slate-400 text-white" 
+                  ? "bg-indigo-600 border-indigo-600 text-white" 
                   : cn("border-slate-300 hover:bg-slate-50", 
                        task.priority === 1 && "border-red-500 bg-red-50/50",
                        task.priority === 2 && "border-orange-500 bg-orange-50/50",
@@ -128,8 +129,9 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
                     )
               )}
               onClick={() => onUpdateTask(task.id, { isCompleted: !task.isCompleted })}
+              title={task.isCompleted ? "Mark as incomplete" : "Mark as complete"}
             >
-              {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5" />}
+              {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 animate-in zoom-in-50 duration-200" />}
             </button>
             
             <div className="flex-1 space-y-4">
@@ -137,15 +139,15 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
                 value={content}
                 onChange={(e) => {
                   setContent(e.target.value);
-                  // Debounce update in real app
                   onUpdateTask(task.id, { content: e.target.value });
                 }}
                 className={cn(
-                  "w-full bg-transparent text-xl font-semibold text-slate-900 placeholder:text-slate-400 resize-none focus:outline-none min-h-[40px]",
-                  task.isCompleted && "line-through text-slate-500"
+                  "w-full bg-transparent text-xl font-bold text-slate-900 placeholder:text-slate-300 resize-none focus:outline-none min-h-[40px] transition-all",
+                  task.isCompleted && "line-through text-slate-400"
                 )}
                 placeholder="Task name"
                 rows={1}
+                title="Task name"
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
                   target.style.height = 'auto';
@@ -159,8 +161,9 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
                   setDescription(e.target.value);
                   onUpdateTask(task.id, { description: e.target.value });
                 }}
-                className="w-full bg-transparent text-sm text-slate-600 placeholder:text-slate-400 resize-none focus:outline-none min-h-[120px]"
-                placeholder="Description / Notes..."
+                className="w-full bg-transparent text-sm text-slate-600 placeholder:text-slate-400 resize-none focus:outline-none min-h-[120px] leading-relaxed"
+                placeholder="Add description..."
+                title="Task description"
               />
             </div>
           </div>
@@ -195,14 +198,16 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
                 type="date"
                 value={task.startDate || ''}
                 onChange={(e) => onUpdateTask(task.id, { startDate: e.target.value })}
-                className="text-sm border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-indigo-500 text-slate-700"
+                className="text-sm border border-slate-200/60 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 text-slate-700 bg-slate-50/50 transition-all font-medium"
+                title="Start date"
               />
-              <span className="text-slate-400">-</span>
+              <span className="text-slate-400 font-bold">→</span>
               <input
                 type="date"
                 value={task.dueDate || ''}
                 onChange={(e) => onUpdateTask(task.id, { dueDate: e.target.value })}
-                className="text-sm border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-indigo-500 text-slate-700"
+                className="text-sm border border-slate-200/60 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 text-slate-700 bg-slate-50/50 transition-all font-medium"
+                title="Due date"
               />
             </div>
 
@@ -262,13 +267,14 @@ export function DetailPanel({ task, isOpen, onClose, onUpdateTask, onDeleteTask,
                   key={p}
                   onClick={() => onUpdateTask(task.id, { priority: p as Priority })}
                   className={cn(
-                    "w-6 h-6 rounded flex items-center justify-center border transition-all",
+                    "w-8 h-8 rounded-lg flex items-center justify-center border transition-all active:scale-90 hover:scale-105",
                     task.priority === p 
-                      ? cn("border-current bg-current/10", priorityColors[p as Priority]) 
-                      : "border-transparent text-slate-300 hover:text-slate-500"
+                      ? cn("border-current bg-current/10 shadow-sm", priorityColors[p as Priority]) 
+                      : "border-slate-100 text-slate-300 hover:text-slate-500 hover:bg-slate-50"
                   )}
+                  title={`Set priority to P${p}`}
                 >
-                  <Flag className="w-3.5 h-3.5 fill-current" />
+                  <Flag className="w-4 h-4 fill-current" />
                 </button>
               ))}
             </div>

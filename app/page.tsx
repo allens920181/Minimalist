@@ -287,15 +287,16 @@ export default function Home() {
       <main className="flex-1 flex flex-col min-w-0 transition-all duration-300">
         
         {/* Top Bar */}
-        <header className="h-14 border-b border-transparent hover:border-slate-100 flex items-center px-4 justify-between transition-colors">
-          <div className="flex items-center gap-3">
+        <header className="h-16 border-b border-slate-100/50 flex items-center px-6 justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-colors"
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Toggle sidebar"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="text-lg font-bold text-slate-800">{viewTitle}</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">{viewTitle}</h1>
             
             {activeView === 'today' && (
               <div className="relative">
@@ -310,8 +311,8 @@ export default function Home() {
                 {isGroupingMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsGroupingMenuOpen(false)} />
-                    <div className="absolute top-full left-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-50 flex flex-col">
-                      <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Group By</div>
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white/95 backdrop-blur-md rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/50 py-1.5 z-50 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Group By</div>
                       <button 
                         onClick={() => { setTodayGroupBy('priority'); setIsGroupingMenuOpen(false); }}
                         className={cn("px-3 py-2 text-sm text-left hover:bg-slate-50 flex items-center justify-between", todayGroupBy === 'priority' ? "text-indigo-600 font-medium" : "text-slate-600")}
@@ -463,12 +464,12 @@ export default function Home() {
             )}
           </div>
           
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+          <div className="flex items-center gap-1.5 bg-slate-100/80 p-1.5 rounded-xl ring-1 ring-slate-200/50">
             <button 
               onClick={() => setViewMode('list')}
               className={cn(
-                "p-1.5 rounded-md transition-all",
-                viewMode === 'list' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                "p-1.5 rounded-lg transition-all duration-200",
+                viewMode === 'list' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
               )}
               title="List View"
             >
@@ -477,8 +478,8 @@ export default function Home() {
             <button 
               onClick={() => setViewMode('board')}
               className={cn(
-                "p-1.5 rounded-md transition-all",
-                viewMode === 'board' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                "p-1.5 rounded-lg transition-all duration-200",
+                viewMode === 'board' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
               )}
               title="Board View"
             >
@@ -487,8 +488,8 @@ export default function Home() {
             <button 
               onClick={() => setViewMode('calendar')}
               className={cn(
-                "p-1.5 rounded-md transition-all",
-                viewMode === 'calendar' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                "p-1.5 rounded-lg transition-all duration-200",
+                viewMode === 'calendar' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
               )}
               title="Calendar View"
             >
@@ -497,8 +498,8 @@ export default function Home() {
             <button 
               onClick={() => setViewMode('gantt')}
               className={cn(
-                "p-1.5 rounded-md transition-all",
-                viewMode === 'gantt' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                "p-1.5 rounded-lg transition-all duration-200",
+                viewMode === 'gantt' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
               )}
               title="Gantt View"
             >
@@ -596,10 +597,10 @@ export default function Home() {
 
       {/* Manage Modal */}
       {isManageModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-800">Manage {activeView === 'projects' ? 'Projects' : 'Labels'}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/10 backdrop-blur-md">
+          <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-300 border border-slate-200/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900tracking-tight">Manage {activeView === 'projects' ? 'Projects' : 'Labels'}</h2>
               <button 
                 onClick={() => setIsManageModalOpen(false)}
                 className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md"
@@ -652,13 +653,14 @@ export default function Home() {
 
       {/* Add Item Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <h2 className="font-semibold text-slate-800">New {activeView === 'projects' ? 'Project' : 'Label'}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/10 backdrop-blur-md">
+          <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300 border border-slate-200/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 tracking-tight">New {activeView === 'projects' ? 'Project' : 'Label'}</h2>
               <button 
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md"
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
