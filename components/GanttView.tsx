@@ -154,12 +154,17 @@ export function GanttView({ tasks, projects, labels, onTaskClick, groupBy }: Gan
         });
     }
 
-    return groups.filter(g => g.tasks.length > 0).map(group => (
+    return groups.filter(g => groupBy === 'project' || g.tasks.length > 0).map(group => (
         <React.Fragment key={group.id}>
             <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 font-semibold text-xs text-slate-500 sticky left-0 z-10">
                 {group.label} ({group.tasks.length})
             </div>
             {group.tasks.map(task => renderTaskRow(task))}
+            {groupBy === 'project' && group.tasks.length === 0 && (
+                <div className="h-10 border-b border-slate-100 flex items-center px-4 text-xs text-slate-400 italic">
+                    No tasks in this project
+                </div>
+            )}
         </React.Fragment>
     ));
   };

@@ -25,6 +25,7 @@ interface SidebarProps {
   toggleSidebar: () => void;
   counts?: { inbox: number; today: number };
   projects?: Project[];
+  labels?: Label[];
 }
 
 interface NavItemProps {
@@ -67,7 +68,7 @@ const NavItem = ({
   </button>
 );
 
-export function Sidebar({ isOpen, activeView, onSelectView, toggleSidebar, counts, projects = [] }: SidebarProps) {
+export function Sidebar({ isOpen, activeView, onSelectView, toggleSidebar, counts, projects = [], labels = [] }: SidebarProps) {
   return (
     <>
       {/* Mobile Overlay */}
@@ -136,6 +137,27 @@ export function Sidebar({ isOpen, activeView, onSelectView, toggleSidebar, count
 
             <NavItem id="priority" icon={Flag} label="Priority" colorClass="text-orange-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
             <NavItem id="labels" icon={Tag} label="Labels" colorClass="text-indigo-600" activeView={activeView} onSelectView={onSelectView} isOpen={isOpen} />
+            
+            {/* Custom Labels */}
+            {isOpen && labels.length > 0 && (
+              <div className="pl-8 space-y-1 pb-1">
+                {labels.map(l => (
+                  <button
+                    key={l.id}
+                    onClick={() => onSelectView(l.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors",
+                      activeView === l.id 
+                        ? "bg-indigo-50/50 text-indigo-700 font-medium" 
+                        : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/80"
+                    )}
+                  >
+                    <span className={cn("w-2 h-2 rounded-full", l.color.split(' ').find(c => c.startsWith('bg-')))} />
+                    <span className="truncate">{l.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </aside>

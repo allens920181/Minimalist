@@ -230,7 +230,7 @@ export function TaskList({ tasks, projects, labels, onTaskClick, onToggleComplet
                 groups.find(g => g.id === dateStr)?.tasks.push(task);
             }
         });
-
+    } else if (groupBy === 'project') {
          groups = [
              { id: 'undefined', label: 'No Project', tasks: [] },
              ...projects.map(p => ({ id: p.id, label: p.name, tasks: [] }))

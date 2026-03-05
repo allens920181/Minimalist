@@ -1,29 +1,136 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { TaskList } from '@/components/TaskList';
 import { DetailPanel } from '@/components/DetailPanel';
 import { BoardView } from '@/components/BoardView';
 import { CalendarView } from '@/components/CalendarView';
 import { GanttView } from '@/components/GanttView';
+import { AuthGate } from '@/components/AuthGate';
+import { useFirestore } from '@/lib/useFirestore';
 import { TASKS, PROJECTS as INITIAL_PROJECTS, LABELS as INITIAL_LABELS, Task, Priority, Project, Label } from '@/lib/data';
-import { Menu, SlidersHorizontal, List, Kanban, Calendar as CalendarIcon, StretchHorizontal, Plus, Settings, Filter, Check, X, Tag, Folder } from 'lucide-react';
+import { Menu, SlidersHorizontal, List, Kanban, Calendar as CalendarIcon, StretchHorizontal, Plus, Settings, Filter, Check, X, Tag, Folder, GripVertical, Pencil, Trash2, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 type ViewMode = 'list' | 'board' | 'calendar' | 'gantt';
 
-export default function Home() {
+function SortableItem({ item, editingId, editingValue, setEditingId, setEditingValue, onRename, onDelete }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 60 : undefined,
+    position: 'relative' as const,
+  };
+
+  const isEditing = editingId === item.id;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 group bg-white",
+        isDragging && "shadow-lg border-indigo-200 ring-2 ring-indigo-500/10 opacity-50"
+      )}
+    >
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <button 
+          {...attributes} 
+          {...listeners}
+          className="p-1 text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing"
+          title="Drag to reorder"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+        <div className={cn("w-3 h-3 rounded-full flex-shrink-0", (item as any).color.replace('bg-', 'bg-'))} />
+        
+        {isEditing ? (
+          <input
+            autoFocus
+            className="text-sm font-medium text-slate-700 bg-white border border-indigo-300 rounded px-1.5 py-0.5 w-full outline-none ring-2 ring-indigo-500/20"
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onBlur={() => onRename(item.id, editingValue)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onRename(item.id, editingValue);
+              if (e.key === 'Escape') setEditingId(null);
+            }}
+          />
+        ) : (
+          <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
+        )}
+      </div>
+      
+      {!isEditing && (
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            onClick={() => { setEditingId(item.id); setEditingValue(item.name); }}
+            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+            title="Rename"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button 
+            onClick={() => onDelete(item.id)}
+            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+            title="Delete"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HomeApp({ userId, userEmail, userPhoto, onSignOut }: { userId: string; userEmail: string | null; userPhoto: string | null; onSignOut: () => void }) {
+  const {
+    tasks, projects, labels, loading,
+    setTasks, setProjects, setLabels
+  } = useFirestore(userId);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState('inbox');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(TASKS);
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [labels, setLabels] = useState<Label[]>(INITIAL_LABELS);
-  
+
   const [todayGroupBy, setTodayGroupBy] = useState<'priority' | 'project' | 'label'>('priority');
+
   const [isGroupingMenuOpen, setIsGroupingMenuOpen] = useState(false);
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
   
   // Filter & Manage States
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
@@ -32,6 +139,10 @@ export default function Home() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newItemName, setNewItemName] = useState('');
+  
+  // Manage CRUD States
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
   const activeProject = projects.find(p => p.id === activeView);
   
   const viewTitle = activeView === 'inbox' ? 'Inbox' : 
@@ -262,7 +373,56 @@ export default function Home() {
     return undefined;
   };
 
+  const handleDeleteItem = (id: string) => {
+    if (activeView === 'projects') {
+      setProjects(projects.filter(p => p.id !== id));
+      setTasks(tasks.map(t => t.projectId === id ? { ...t, projectId: 'inbox' } : t));
+    } else {
+      setLabels(labels.filter(l => l.id !== id));
+      setTasks(tasks.map(t => ({
+        ...t,
+        labels: t.labels.filter(labelId => labelId !== id)
+      })));
+    }
+  };
+
+  const handleRenameItem = (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    if (activeView === 'projects') {
+      setProjects(projects.map(p => p.id === id ? { ...p, name: newName } : p));
+    } else {
+      setLabels(labels.map(l => l.id === id ? { ...l, name: newName } : l));
+    }
+    setEditingId(null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      if (activeView === 'projects') {
+        const oldIndex = projects.findIndex((i) => i.id === active.id);
+        const newIndex = projects.findIndex((i) => i.id === over?.id);
+        setProjects(arrayMove(projects, oldIndex, newIndex));
+      } else {
+        const oldIndex = labels.findIndex((i) => i.id === active.id);
+        const newIndex = labels.findIndex((i) => i.id === over?.id);
+        setLabels(arrayMove(labels, oldIndex, newIndex));
+      }
+    }
+  };
+
   const parentTask = selectedTask?.parentId ? findTaskById(tasks, selectedTask.parentId) : undefined;
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-400">Syncing your data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
@@ -281,6 +441,7 @@ export default function Home() {
           today: todayCount
         }}
         projects={projects}
+        labels={labels}
       />
 
       {/* Main Content */}
@@ -506,6 +667,20 @@ export default function Home() {
               <StretchHorizontal className="w-4 h-4" />
             </button>
           </div>
+
+          {/* User & Sign Out */}
+          <div className="flex items-center gap-2 ml-2">
+            {userPhoto && (
+              <img src={userPhoto} alt={userEmail || 'User'} className="w-7 h-7 rounded-full ring-2 ring-slate-200" referrerPolicy="no-referrer" />
+            )}
+            <button
+              onClick={onSignOut}
+              title="Sign out"
+              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </header>
 
         {/* Task List Area */}
@@ -600,44 +775,41 @@ export default function Home() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/10 backdrop-blur-md">
           <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-300 border border-slate-200/50">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900tracking-tight">Manage {activeView === 'projects' ? 'Projects' : 'Labels'}</h2>
+              <h2 className="text-lg font-bold text-slate-900 tracking-tight">Manage {activeView === 'projects' ? 'Projects' : 'Labels'}</h2>
               <button 
                 onClick={() => setIsManageModalOpen(false)}
                 className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md"
+                title="Close"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-4 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-2">
-                {activeView === 'projects' && projects.map(project => (
-                  <div key={project.id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 group">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("w-3 h-3 rounded-full", project.color.replace('bg-', 'bg-'))} />
-                      <span className="text-sm font-medium text-slate-700">{project.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded">
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+              <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext 
+                  items={activeView === 'projects' ? projects : labels}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2">
+                    {(activeView === 'projects' ? projects : labels).map(item => (
+                      <SortableItem 
+                        key={item.id} 
+                        item={item} 
+                        editingId={editingId}
+                        editingValue={editingValue}
+                        setEditingId={setEditingId}
+                        setEditingValue={setEditingValue}
+                        onRename={handleRenameItem}
+                        onDelete={handleDeleteItem}
+                      />
+                    ))}
                   </div>
-                ))}
-
-                {activeView === 'labels' && labels.map(label => (
-                  <div key={label.id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 group">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("w-3 h-3 rounded-full", label.color.replace('bg-', 'bg-'))} />
-                      <span className="text-sm font-medium text-slate-700">{label.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded">
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
               <button 
@@ -705,5 +877,13 @@ export default function Home() {
       )}
 
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <AuthGate>
+      {(user, onSignOut) => <HomeApp userId={user.uid} userEmail={user.email} userPhoto={user.photoURL} onSignOut={onSignOut} />}
+    </AuthGate>
   );
 }
