@@ -1,0 +1,5 @@
+{
+  "name": "Minimalist Todo",
+  "description": "A minimalist, Todoist-inspired task management app with nested projects, priorities, and notes.",
+  "requestFramePermissions": []
+}
