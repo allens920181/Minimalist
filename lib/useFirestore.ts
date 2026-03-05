@@ -1,7 +1,5 @@
 // lib/useFirestore.ts
-// Real-time sync hook for tasks, projects, and labels using Firebase Firestore.
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   collection,
   doc,
@@ -9,8 +7,6 @@ import {
   setDoc,
   deleteDoc,
   writeBatch,
-  query,
-  orderBy,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Task, Project, Label } from './data';
@@ -25,20 +21,21 @@ type UserData = {
   setLabels: (labels: Label[]) => Promise<void>;
 };
 
-// Helper: flatten nested tasks array into a flat map for Firestore storage
-function flattenTasks(tasks: Task[]): Task[] {
-  const flat: Task[] = [];
+// Flatten nested task tree → flat array (strips the children field for Firestore storage)
+function flattenTasks(tasks: Task[]): Omit<Task, 'children'>[] {
+  const flat: Omit<Task, 'children'>[] = [];
   const traverse = (taskList: Task[]) => {
     for (const task of taskList) {
-      flat.push(task);
-      if (task.children) traverse(task.children);
+      const { children, ...taskData } = task;
+      flat.push(taskData);
+      if (children && children.length > 0) traverse(children);
     }
   };
   traverse(tasks);
   return flat;
 }
 
-// Helper: rebuild nested structure from flat Firestore docs
+// Rebuild nested tree from flat Firestore docs using parentId
 function buildTree(flatTasks: Task[]): Task[] {
   const map = new Map<string, Task>();
   const roots: Task[] = [];
@@ -62,6 +59,12 @@ export function useFirestore(userId: string | null): UserData {
   const [labels, setLabelsState] = useState<Label[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Track which task/project/label IDs are currently in Firestore
+  // so we can delete removed ones when setTasks/setProjects/setLabels is called
+  const firestoreTaskIds = useRef<Set<string>>(new Set());
+  const firestoreProjectIds = useRef<Set<string>>(new Set());
+  const firestoreLabelIds = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (!userId) {
       setTasksState([]);
@@ -75,16 +78,21 @@ export function useFirestore(userId: string | null): UserData {
 
     const unsubTasks = onSnapshot(collection(db, base, 'tasks'), (snap) => {
       const flat = snap.docs.map((d) => d.data() as Task);
+      firestoreTaskIds.current = new Set(flat.map(t => t.id));
       setTasksState(buildTree(flat));
       setLoading(false);
     });
 
     const unsubProjects = onSnapshot(collection(db, base, 'projects'), (snap) => {
-      setProjectsState(snap.docs.map((d) => d.data() as Project));
+      const items = snap.docs.map((d) => d.data() as Project);
+      firestoreProjectIds.current = new Set(items.map(p => p.id));
+      setProjectsState(items);
     });
 
     const unsubLabels = onSnapshot(collection(db, base, 'labels'), (snap) => {
-      setLabelsState(snap.docs.map((d) => d.data() as Label));
+      const items = snap.docs.map((d) => d.data() as Label);
+      firestoreLabelIds.current = new Set(items.map(l => l.id));
+      setLabelsState(items);
     });
 
     return () => {
@@ -94,38 +102,62 @@ export function useFirestore(userId: string | null): UserData {
     };
   }, [userId]);
 
-  // Write entire tasks array to Firestore (flat)
+  // Write entire tasks array to Firestore.
+  // - Strips `children` field (tree is reconstructed from parentId on read)
+  // - Deletes Firestore docs for tasks no longer in the array
   const setTasks = async (newTasks: Task[]) => {
     if (!userId) return;
-    setTasksState(newTasks);
+    setTasksState(newTasks); // optimistic update
     const flat = flattenTasks(newTasks);
+    const newIds = new Set(flat.map(t => t.id));
+
     const batch = writeBatch(db);
-    // Delete all existing tasks then write fresh ones
-    const base = `users/${userId}/tasks`;
-    // We write each task as a document keyed by id
+    const tasksPath = `users/${userId}/tasks`;
+
+    // Upsert all current tasks
     flat.forEach((task) => {
-      batch.set(doc(db, base, task.id), task);
+      batch.set(doc(db, tasksPath, task.id), task);
     });
+
+    // Delete tasks removed from the array
+    for (const id of firestoreTaskIds.current) {
+      if (!newIds.has(id)) {
+        batch.delete(doc(db, tasksPath, id));
+      }
+    }
+
     await batch.commit();
   };
 
   const setProjects = async (newProjects: Project[]) => {
     if (!userId) return;
     setProjectsState(newProjects);
+    const newIds = new Set(newProjects.map(p => p.id));
     const batch = writeBatch(db);
-    newProjects.forEach((p) => {
-      batch.set(doc(db, `users/${userId}/projects`, p.id), p);
-    });
+    const base = `users/${userId}/projects`;
+
+    newProjects.forEach((p) => batch.set(doc(db, base, p.id), p));
+
+    for (const id of firestoreProjectIds.current) {
+      if (!newIds.has(id)) batch.delete(doc(db, base, id));
+    }
+
     await batch.commit();
   };
 
   const setLabels = async (newLabels: Label[]) => {
     if (!userId) return;
     setLabelsState(newLabels);
+    const newIds = new Set(newLabels.map(l => l.id));
     const batch = writeBatch(db);
-    newLabels.forEach((l) => {
-      batch.set(doc(db, `users/${userId}/labels`, l.id), l);
-    });
+    const base = `users/${userId}/labels`;
+
+    newLabels.forEach((l) => batch.set(doc(db, base, l.id), l));
+
+    for (const id of firestoreLabelIds.current) {
+      if (!newIds.has(id)) batch.delete(doc(db, base, id));
+    }
+
     await batch.commit();
   };
 
