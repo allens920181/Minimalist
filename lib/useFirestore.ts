@@ -75,14 +75,18 @@ export function useFirestore(userId: string | null): UserData {
   const firestoreProjectIds = useRef<Set<string>>(new Set());
   const firestoreLabelIds = useRef<Set<string>>(new Set());
 
+  // Reset local state when user logs out
   useEffect(() => {
     if (!userId) {
       setTasksState([]);
       setProjectsState([]);
       setLabelsState([]);
       setLoading(false);
-      return;
     }
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
 
     const base = `users/${userId}`;
 
