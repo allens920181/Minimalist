@@ -1,5 +1,5 @@
 // lib/useFirestore.ts
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import {
   collection,
   doc,
@@ -52,39 +52,36 @@ function buildTree(flatTasks: Task[]): Task[] {
 }
 
 export function useFirestore(userId: string | null): UserData {
-  const [tasks, setTasksState] = useState<Task[]>([]);
-  const [projects, setProjectsState] = useState<Project[]>([]);
-  const [labels, setLabelsState] = useState<Label[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Raw state — only populated when userId is set (via onSnapshot callbacks)
+  const [rawTasks, setRawTasks] = useState<Task[]>([]);
+  const [rawProjects, setRawProjects] = useState<Project[]>([]);
+  const [rawLabels, setRawLabels] = useState<Label[]>([]);
+  // Start loading only when there's a userId to fetch from
+  const [loading, setLoading] = useState(!!userId);
+
+  // Derived: gate all data behind userId so we never need to setState([]) in an effect
+  const tasks = useMemo(() => (userId ? rawTasks : []), [userId, rawTasks]);
+  const projects = useMemo(() => (userId ? rawProjects : []), [userId, rawProjects]);
+  const labels = useMemo(() => (userId ? rawLabels : []), [userId, rawLabels]);
 
   // Always-fresh refs so async write fns never get stale closures
   const tasksRef = useRef<Task[]>([]);
   const projectsRef = useRef<Project[]>([]);
   const labelsRef = useRef<Label[]>([]);
 
-  // Keep refs in sync with state (useLayoutEffect runs sync after render, safe to write refs)
+  // Keep refs in sync with derived state (useLayoutEffect = sync after render)
   useLayoutEffect(() => {
     tasksRef.current = tasks;
     projectsRef.current = projects;
     labelsRef.current = labels;
   });
 
-  // Track which task/project/label IDs are currently in Firestore
-  // so we can delete removed ones when setTasks/setProjects/setLabels is called
+  // Track which IDs are currently in Firestore for delete diffing
   const firestoreTaskIds = useRef<Set<string>>(new Set());
   const firestoreProjectIds = useRef<Set<string>>(new Set());
   const firestoreLabelIds = useRef<Set<string>>(new Set());
 
-  // Reset local state when user logs out
-  useEffect(() => {
-    if (!userId) {
-      setTasksState([]);
-      setProjectsState([]);
-      setLabelsState([]);
-      setLoading(false);
-    }
-  }, [userId]);
-
+  // Subscribe to Firestore when userId is available
   useEffect(() => {
     if (!userId) return;
 
@@ -93,20 +90,20 @@ export function useFirestore(userId: string | null): UserData {
     const unsubTasks = onSnapshot(collection(db, base, 'tasks'), (snap) => {
       const flat = snap.docs.map((d) => d.data() as Task);
       firestoreTaskIds.current = new Set(flat.map(t => t.id));
-      setTasksState(buildTree(flat));
+      setRawTasks(buildTree(flat));
       setLoading(false);
     });
 
     const unsubProjects = onSnapshot(collection(db, base, 'projects'), (snap) => {
       const items = snap.docs.map((d) => d.data() as Project);
       firestoreProjectIds.current = new Set(items.map(p => p.id));
-      setProjectsState(items);
+      setRawProjects(items);
     });
 
     const unsubLabels = onSnapshot(collection(db, base, 'labels'), (snap) => {
       const items = snap.docs.map((d) => d.data() as Label);
       firestoreLabelIds.current = new Set(items.map(l => l.id));
-      setLabelsState(items);
+      setRawLabels(items);
     });
 
     return () => {
@@ -116,25 +113,20 @@ export function useFirestore(userId: string | null): UserData {
     };
   }, [userId]);
 
-  // Write entire tasks array to Firestore.
-  // - Strips `children` field (tree is reconstructed from parentId on read)
-  // - Deletes Firestore docs for tasks no longer in the array
+  // Write tasks to Firestore — only diff-writes changed docs
   const setTasks = async (newTasks: Task[]) => {
     if (!userId) return;
 
-    // Use ref to get truly current state (avoids stale closure)
     const flatOld = flattenTasks(tasksRef.current);
     const oldMap = new Map(flatOld.map(t => [t.id, t]));
 
-    setTasksState(newTasks); // optimistic update
+    setRawTasks(newTasks); // optimistic update
 
     const flatNew = flattenTasks(newTasks);
     const newIds = new Set(flatNew.map(t => t.id));
-
     const batch = writeBatch(db);
     const tasksPath = `users/${userId}/tasks`;
 
-    // Upsert only changed/new tasks
     flatNew.forEach((task) => {
       const oldTask = oldMap.get(task.id);
       if (!oldTask || JSON.stringify(oldTask) !== JSON.stringify(task)) {
@@ -142,11 +134,8 @@ export function useFirestore(userId: string | null): UserData {
       }
     });
 
-    // Delete tasks removed from the array
     for (const id of firestoreTaskIds.current) {
-      if (!newIds.has(id)) {
-        batch.delete(doc(db, tasksPath, id));
-      }
+      if (!newIds.has(id)) batch.delete(doc(db, tasksPath, id));
     }
 
     await batch.commit();
@@ -156,7 +145,7 @@ export function useFirestore(userId: string | null): UserData {
     if (!userId) return;
 
     const oldMap = new Map(projectsRef.current.map(p => [p.id, p]));
-    setProjectsState(newProjects);
+    setRawProjects(newProjects);
 
     const newIds = new Set(newProjects.map(p => p.id));
     const batch = writeBatch(db);
@@ -180,7 +169,7 @@ export function useFirestore(userId: string | null): UserData {
     if (!userId) return;
 
     const oldMap = new Map(labelsRef.current.map(l => [l.id, l]));
-    setLabelsState(newLabels);
+    setRawLabels(newLabels);
 
     const newIds = new Set(newLabels.map(l => l.id));
     const batch = writeBatch(db);
